@@ -12,6 +12,7 @@ from .settlement.closing import Closing
 from .settlement.demand import Demand
 from .interfaces.bundles import Bundles
 from .quality import Quality
+from .load.models import LoadModels
 from .values import object_fields, reject
 
 
@@ -31,6 +32,7 @@ class EnergyService:
         self.bundles = Bundles(self.closing)
         self.balance = MeterBalance(self.catalog, self.reconstruction)
         self.demand = Demand(self.reconstruction)
+        self.load_models = LoadModels(self.store, self.reconstruction, self.catalog)
         self.quality = Quality(
             self.store,
             self.catalog,
@@ -161,6 +163,24 @@ class EnergyService:
                 "demand",
                 self.demand,
                 ["windows", "rolling_peak", "charge", "exceedances", "load_factor"],
+            ),
+            (
+                "load",
+                self.load_models,
+                [
+                    "train",
+                    "get",
+                    "list",
+                    "verify",
+                    "assign_days",
+                    "assignments",
+                    "compare_versions",
+                ],
+            ),
+            (
+                "profile",
+                self.load_models.builder,
+                ["build", "normalized"],
             ),
             (
                 "quality",

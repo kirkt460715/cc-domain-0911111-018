@@ -27,6 +27,13 @@ CREATE TABLE IF NOT EXISTS closures(id TEXT PRIMARY KEY,start INTEGER NOT NULL,e
  state TEXT NOT NULL,revision INTEGER NOT NULL,payload TEXT NOT NULL,digest TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS corrections(id TEXT PRIMARY KEY,closure TEXT NOT NULL,payload TEXT NOT NULL,
  digest TEXT NOT NULL,approved INTEGER NOT NULL,operator TEXT);
+CREATE TABLE IF NOT EXISTS load_models(id TEXT PRIMARY KEY,meter TEXT NOT NULL,revision INTEGER NOT NULL,
+ created_at INTEGER NOT NULL,payload TEXT NOT NULL,digest TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS load_model_time ON load_models(meter,created_at,id);
+CREATE TABLE IF NOT EXISTS load_assignments(model TEXT NOT NULL,meter TEXT NOT NULL,date TEXT NOT NULL,
+ cluster_label TEXT,state TEXT NOT NULL,distance TEXT,revision INTEGER NOT NULL,
+ payload TEXT NOT NULL,digest TEXT NOT NULL,PRIMARY KEY(model,date));
+CREATE INDEX IF NOT EXISTS load_assignment_model ON load_assignments(model,date);
 CREATE TABLE IF NOT EXISTS audit(seq INTEGER PRIMARY KEY AUTOINCREMENT,kind TEXT NOT NULL,
  entity TEXT NOT NULL,payload TEXT NOT NULL,previous TEXT NOT NULL,digest TEXT NOT NULL);
 """
@@ -165,7 +172,7 @@ class Store:
         if check != "ok":
             reject("integrity", "SQLite integrity check failed", result=check)
         counts = {}
-        for table in [
+        payload_tables = [
             "meters",
             "segments",
             "readings",
@@ -174,10 +181,17 @@ class Store:
             "factors",
             "closures",
             "corrections",
-        ]:
+        ]
+        for table in payload_tables:
             rows = self.rows("SELECT id FROM " + table + " ORDER BY id")
             for row in rows:
                 self.payload(table, row["id"])
+            counts[table] = len(rows)
+        for table in ["load_models", "load_assignments"]:
+            rows = self.rows("SELECT * FROM " + table + " ORDER BY rowid")
+            for row in rows:
+                if fingerprint(parse_json(row["payload"])) != row["digest"]:
+                    reject("integrity", table + " payload changed", id=row["model"])
             counts[table] = len(rows)
         for row in self.rows("SELECT * FROM reading_history"):
             if fingerprint(parse_json(row["payload"])) != row["digest"]:

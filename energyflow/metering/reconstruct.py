@@ -11,7 +11,7 @@ class Reconstructor:
 
     def segment_intervals(self, segment):
         config = self.catalog.segment(segment)
-        previous = {
+        baseline = {
             "id": "baseline:" + segment,
             "at": config["start"],
             "value": config["baseline"],
@@ -19,8 +19,17 @@ class Reconstructor:
             "revision": 0,
             "digest": fingerprint(config),
         }
+        readings = self.readings.segment(segment)
+        # A replacement segment starts from its own installed baseline; seed it
+        # explicitly so energy between installation and the first new reading is
+        # attributed to the new segment instead of becoming an uncovered gap.
+        if readings and readings[0]["at"] == config["start"]:
+            previous = readings[0]
+            readings = readings[1:]
+        else:
+            previous = baseline
         result = []
-        for current in self.readings.segment(segment):
+        for current in readings:
             duration = current["at"] - previous["at"]
             evidence = {
                 "left": {
